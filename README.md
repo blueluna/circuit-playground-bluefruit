@@ -22,7 +22,7 @@ $ ./jlinkgdb
 Then run the program
 
 ```
-$ cargo run --example beacon
+$ cargo run --example neopixel
 ```
 
 cargo will use the run definition found in `.cargo/config` to launch `gdb` with
