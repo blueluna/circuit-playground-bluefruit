@@ -1,0 +1,24 @@
+[package]
+name = "circuit-playground-bluefruit"
+version = "0.0.1"
+authors = ["Erik Svensson <erik.public@gmail.com>"]
+edition = "2018"
+
+[dev-dependencies]
+nrf52840-pac = "0.8"
+nrf52840-hal = "0.8"
+cortex-m = "0.6"
+cortex-m-rt = "0.6"
+cortex-m-rtfm = "0.4"
+panic-semihosting = "0.5"
+cortex-m-semihosting = "0.3"
+
+[profile.release]
+opt-level = "s"
+debug = false
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = "s"
+debug = false
