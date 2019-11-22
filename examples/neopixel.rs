@@ -23,26 +23,29 @@ const NEOPIXEL_TIME_0_HIGH: u16 = 6 | PWM_FALLING_EDGE;
 // 62.5ns * 13 -> 0.8125us
 const NEOPIXEL_TIME_1_HIGH: u16 = 13 | PWM_FALLING_EDGE;
 
-#[app(device = nrf52840_pac)]
+#[app(device = nrf52840_pac, peripherals = true)]
 const APP: () = {
-    static mut PWM: pac::PWM0 = ();
-    static mut TIMER: pac::TIMER0 = ();
-    static mut UARTE: uarte::Uarte<pac::UARTE0> = ();
-    static mut COUNTER: u8 = 0;
+    struct Resources {
+        pwm: pac::PWM0,
+        timer: pac::TIMER0,
+        uart: uarte::Uarte<pac::UARTE0>,
+        #[init(0)]
+        counter: u8,
+    }
 
     #[init]
-    fn init() {
-        let p0 = device.P0.split();
+    fn init(cx: init::Context) -> init::LateResources {
+        let p0 = cx.device.P0.split();
         // Configure to use external clocks, and start them
         // The Adafruit Circuit Playground Bluefruit do not have an external 32.768 kHz source
-        let _clocks = device
+        let _clocks = cx.device
             .CLOCK
             .constrain()
             .enable_ext_hfosc()
             .set_lfclk_src_synth()
             .start_lfclk();
 
-        let uarte0 = device.UARTE0.constrain(
+        let uarte0 = cx.device.UARTE0.constrain(
             uarte::Pins {
                 txd: p0.p0_14.into_push_pull_output(gpio::Level::High).degrade(),
                 rxd: p0.p0_30.into_floating_input().degrade(),
@@ -53,7 +56,7 @@ const APP: () = {
             uarte::Baudrate::BAUD115200,
         );
 
-        let timer = device.TIMER0;
+        let timer = cx.device.TIMER0;
         timer.mode.write(|w| w.mode().timer());
         timer.bitmode.write(|w| w.bitmode()._32bit());
         timer.shorts.write(|w| w.compare0_clear().enabled().compare0_stop().disabled());
@@ -63,7 +66,7 @@ const APP: () = {
         timer.tasks_clear.write(|w| w.tasks_clear().set_bit());
         timer.tasks_start.write(|w| w.tasks_start().set_bit());
 
-        let pwm = device.PWM0;
+        let pwm = cx.device.PWM0;
 
         // Only count up
         pwm.mode.write(|w| w.updown().up());
@@ -78,16 +81,18 @@ const APP: () = {
         // Enable the PWM instance
         pwm.enable.write(|w| w.enable().set_bit());
 
-        PWM = pwm;
-        TIMER = timer;
-        UARTE = uarte0;
+        init::LateResources {
+            pwm,
+            timer,
+            uart: uarte0,
+        }
     }
 
-    #[interrupt(resources = [PWM, COUNTER, TIMER])]
-    fn TIMER0() {
-        let pwm = resources.PWM;
-        let counter = resources.COUNTER;
-        resources.TIMER.events_compare[0].reset();
+    #[task(binds = TIMER0, resources = [pwm, counter, timer])]
+    fn timer(cx: timer::Context) {
+        let pwm = cx.resources.pwm;
+        let counter = cx.resources.counter;
+        cx.resources.timer.events_compare[0].reset();
         let mut colours = [0u8; 30];
         let mut pwm_words = [0x8000u16; 30 * 8 + 2];
 
@@ -149,9 +154,9 @@ const APP: () = {
     }
 
 
-    #[idle(resources = [UARTE])]
-    fn idle() -> ! {
-        let uarte = resources.UARTE;
+    #[idle(resources = [uart])]
+    fn idle(cx: idle::Context) -> ! {
+        let uarte = cx.resources.uart;
 
         hprintln!(" ~ Idle ~ ").unwrap();
         let mut buffer = [0u8; 128];
